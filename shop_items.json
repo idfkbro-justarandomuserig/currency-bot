@@ -1,0 +1,50 @@
+{
+    "76e384d2": {
+        "id": "76e384d2",
+        "name": "VIP Role",
+        "credit_cost": 500,
+        "usd_price": "5$",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    },
+    "174ef93b": {
+        "id": "174ef93b",
+        "name": "Custom role Color of your coice",
+        "credit_cost": 250,
+        "usd_price": "2.50$",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    },
+    "594a1f0e": {
+        "id": "594a1f0e",
+        "name": "Art Commision (OC, character, etc, etc,) Absolutely NO NSFW requests you will be perma banned",
+        "credit_cost": 1,
+        "usd_price": "N/A",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    },
+    "5f413fc4": {
+        "id": "5f413fc4",
+        "name": "Custom emoji upload (Submit your own emoji for the server)",
+        "credit_cost": 2500,
+        "usd_price": "2.50$",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    },
+    "0de39f7b": {
+        "id": "0de39f7b",
+        "name": "Custom Tag Role (One exclusive, named role with color and icon)",
+        "credit_cost": 4000,
+        "usd_price": "4$",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    },
+    "524dfb9b": {
+        "id": "524dfb9b",
+        "name": "Supporter role + some special commands just for you",
+        "credit_cost": 1,
+        "usd_price": "10$ only money",
+        "expires_at": null,
+        "added_by": 1220117043769249863
+    }
+}

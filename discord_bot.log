@@ -1,0 +1,77 @@
+2025-05-04 19:09:00,218:WARNING:disnake.client: PyNaCl is not installed, voice will NOT be supported
+2025-05-04 19:09:00,224:INFO:disnake: ShopAdminCog loaded.
+2025-05-04 19:09:00,224:INFO:disnake: Starting bot (using sync_commands_debug=True)...
+2025-05-04 19:09:00,225:INFO:disnake.client: logging in using static token
+2025-05-04 19:09:01,174:INFO:disnake.gateway: Shard ID None has sent the IDENTIFY payload.
+2025-05-04 19:09:01,499:INFO:disnake.gateway: Shard ID None has connected to Gateway: ["gateway-prd-us-east1-b-l2m0",{"micros":155602,"calls":["id_created",{"micros":793,"calls":[]},"session_lookup_time",{"micros":349,"calls":[]},"session_lookup_finished",{"micros":16,"calls":[]},"discord-sessions-prd-2-37",{"micros":154148,"calls":["start_session",{"micros":135602,"calls":["discord-api-rpc-57b989596-rqpqv",{"micros":126083,"calls":["get_user",{"micros":15144},"get_guilds",{"micros":29609},"send_scheduled_deletion_message",{"micros":7},"guild_join_requests",{"micros":2},"authorized_ip_coro",{"micros":8},"pending_payments",{"micros":1590},"apex_user_experiments",{"micros":26},"user_activities",{"micros":3}]}]},"starting_guild_connect",{"micros":25,"calls":[]},"presence_started",{"micros":11602,"calls":[]},"guilds_started",{"micros":65,"calls":[]},"lobbies_started",{"micros":1,"calls":[]},"guilds_connect",{"micros":1,"calls":[]},"presence_connect",{"micros":6835,"calls":[]},"connect_finished",{"micros":6839,"calls":[]},"build_ready",{"micros":12,"calls":[]},"clean_ready",{"micros":1,"calls":[]},"optimize_ready",{"micros":0,"calls":[]},"split_ready",{"micros":1,"calls":[]}]}]}] (Session ID: ee2a415c2e248a775adc2563232cb000, Resume URL: wss://gateway-us-east1-b.discord.gg).
+2025-05-04 19:09:01,712:INFO:disnake.ext.commands.interaction_bot_base: Application command synchronization:
+GLOBAL COMMANDS
+===============
+| Update is required: False
+| To upsert:
+|     -
+| To edit:
+|     -
+| To delete:
+|     -
+| No changes:
+|     <SlashCommand name='shop'>
+|     <SlashCommand name='balance'>
+|     <SlashCommand name='savings'>
+|     <SlashCommand name='gamble'>
+|     <SlashCommand name='lottery'>
+|     <SlashCommand name='supporter'>
+|     <SlashCommand name='vip'>
+|     <SlashCommand name='help'>
+|     <SlashCommand name='shopadmin'>
+|     <SlashCommand name='admincoins'>
+2025-05-04 19:09:01,712:INFO:disnake.ext.commands.interaction_bot_base: Command synchronization task has finished
+2025-05-04 19:09:03,510:INFO:disnake: Shop Bot#9554 ready. Version: 2.10.1
+2025-05-04 19:09:03,511:INFO:disnake: Loaded user data.
+2025-05-04 19:09:03,512:INFO:disnake: Loaded shop items.
+2025-05-04 19:09:03,512:INFO:disnake: Loaded bot data.
+2025-05-04 19:09:03,512:INFO:disnake: Starting retro scan...
+2025-05-04 19:09:03,512:INFO:disnake: Scanning guild: A fun server
+2025-05-04 19:09:03,515:INFO:disnake: Starting autosave.
+2025-05-04 19:09:03,515:INFO:disnake: Starting lottery drawing loop.
+2025-05-04 19:09:03,516:INFO:disnake: Attempting lottery drawing...
+2025-05-04 19:09:03,516:INFO:disnake: Loaded bot data.
+2025-05-04 19:09:03,517:INFO:disnake: Loaded user data.
+2025-05-04 19:09:03,517:INFO:disnake: No lottery tickets sold.
+2025-05-04 19:10:00,178:INFO:disnake:  Scanned 5195 msgs (57 channels). Skipped 0.
+2025-05-04 19:10:00,178:INFO:disnake: Applying retroactive counts...
+2025-05-04 19:10:00,178:INFO:disnake: Loaded user data.
+2025-05-04 19:10:00,179:INFO:disnake: --- Retro Scan Summary ---
+2025-05-04 19:10:00,179:INFO:disnake:  Duration: 56.67s, Total Scanned: 5195
+2025-05-04 19:10:00,179:INFO:disnake:  Users Awarded: 62, Total Coins: 4089
+2025-05-04 19:10:00,179:INFO:disnake: --------------------------
+2025-05-04 19:10:00,180:INFO:disnake: Bot ready.
+2025-05-04 19:13:41,965:INFO:disnake: Loaded bot data.
+2025-05-04 19:13:46,802:INFO:disnake: User 1220117043769249863 slots. Bet:1000, Win:0.00
+2025-05-04 19:19:43,001:ERROR:disnake: Error in redblack: Command raised an exception: TypeError: Embed.__init__() got an unexpected keyword argument 'footer'
+Traceback (most recent call last):
+  File "/home/daviselijah604/discord-currency-bot/venv/lib/python3.11/site-packages/disnake/ext/commands/slash_core.py", line 366, in invoke
+    await call_param_func(self.callback, inter, self.cog, **kwargs)
+  File "/home/daviselijah604/discord-currency-bot/venv/lib/python3.11/site-packages/disnake/ext/commands/params.py", line 1074, in call_param_func
+    return await maybe_coroutine(safe_call, function, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/daviselijah604/discord-currency-bot/venv/lib/python3.11/site-packages/disnake/utils.py", line 599, in maybe_coroutine
+    return await value
+           ^^^^^^^^^^^
+  File "/home/daviselijah604/discord-currency-bot/working_money_bot.py", line 669, in gamble_redblack
+    result = disnake.Embed(title=f"{emoji} {inter.author.display_name} played Red/Black!", footer=f"Bet:{amount:,}|Choice:{choice.capitalize()}", description=f"Rolled: **{roll}** ({color})")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Embed.__init__() got an unexpected keyword argument 'footer'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/daviselijah604/discord-currency-bot/venv/lib/python3.11/site-packages/disnake/ext/commands/slash_core.py", line 737, in invoke_children
+    await subcmd.invoke(inter, **kwargs)
+  File "/home/daviselijah604/discord-currency-bot/venv/lib/python3.11/site-packages/disnake/ext/commands/slash_core.py", line 375, in invoke
+    raise CommandInvokeError(exc) from exc
+disnake.ext.commands.errors.CommandInvokeError: Command raised an exception: TypeError: Embed.__init__() got an unexpected keyword argument 'footer'
+2025-05-04 19:30:33,705:INFO:disnake.client: Cleaning up tasks.
+2025-05-04 19:30:33,706:INFO:disnake.client: Cleaning up after 3 tasks.
+2025-05-04 19:30:33,709:INFO:disnake.client: All tasks finished cancelling.
+2025-05-04 19:30:33,709:INFO:disnake.client: Closing the event loop.
