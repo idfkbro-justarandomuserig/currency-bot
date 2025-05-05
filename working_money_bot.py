@@ -1,9 +1,5 @@
 # bot.py
-# Final Version incorporating all features and fixes.
-# Includes: Lottery, Supporter/VIP commands, setjackpot cmd, /balance cmd, setjackpotcontribution cmd.
-# Public responses for Shop, Gambling, Lottery Info.
-# Help command fixes: loading state, SlashGroup error, doesn't list self, Admin override.
-# Uses sync_commands_debug=True and correct Param syntax.
+# Final Version - Truly Complete Code - Incorporating all features and fixes.
 
 import disnake
 from disnake.ext import commands, tasks
@@ -19,16 +15,17 @@ from dotenv import load_dotenv
 from datetime import time, timedelta, timezone
 import uuid # For generating shop item IDs
 
-# --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
-logger = logging.getLogger('disnake')
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='discord_bot.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(console_handler)
+# --- Logging Setup (Revised - Final Fix) ---
+log_formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s')
+log_level = logging.INFO
+logging.basicConfig(level=log_level, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s', handlers=[logging.StreamHandler()])
+disnake_logger = logging.getLogger('disnake')
+disnake_logger.setLevel(log_level)
+log_file_handler = logging.FileHandler(filename='discord_bot.log', encoding='utf-8', mode='w')
+log_file_handler.setFormatter(log_formatter)
+disnake_logger.addHandler(log_file_handler)
+disnake_logger.propagate = False # Prevent double console logging
+logger = logging.getLogger(__name__) # Logger for our own code
 
 # --- Configuration ---
 load_dotenv()
@@ -38,7 +35,7 @@ _SHOPKEEPER_ROLE_ID_STR = os.getenv("SHOPKEEPER_ROLE_ID", "1368456384886079519")
 _ADMIN_CHANNEL_ID_STR = os.getenv("ADMIN_CHANNEL_ID", "1368455333751816213")
 _SUPPORTER_ROLE_ID_STR = os.getenv("SUPPORTER_ROLE_ID", "1368689142363590726")
 _VIP_ROLE_ID_STR = os.getenv("VIP_ROLE_ID", "1368689440045797436")
-_LOTTERY_ANNOUNCE_CHANNEL_ID_STR = os.getenv("LOTTERY_ANNOUNCE_CHANNEL_ID", _ADMIN_CHANNEL_ID_STR) # Default to Admin Channel
+_LOTTERY_ANNOUNCE_CHANNEL_ID_STR = os.getenv("LOTTERY_ANNOUNCE_CHANNEL_ID", _ADMIN_CHANNEL_ID_STR)
 
 try:
     SHOPKEEPER_ROLE_ID = int(_SHOPKEEPER_ROLE_ID_STR)
@@ -49,51 +46,33 @@ try:
 except ValueError:
     logger.critical("FATAL: Invalid Role/Channel IDs."); exit(1)
 
-# (Placeholder ID check logic)
-original_placeholders = {
-    "SHOPKEEPER_ROLE_ID": 987654321098765432, "ADMIN_CHANNEL_ID": 111222333444555666,
-    "SUPPORTER_ROLE_ID": 101010101010101010, "VIP_ROLE_ID": 202020202020202020,
-    "LOTTERY_ANNOUNCE_CHANNEL_ID": 111222333444555666 if _LOTTERY_ANNOUNCE_CHANNEL_ID_STR == "111222333444555666" else None }
-current_ids = { "SHOPKEEPER_ROLE_ID": SHOPKEEPER_ROLE_ID, "ADMIN_CHANNEL_ID": ADMIN_CHANNEL_ID,
-    "SUPPORTER_ROLE_ID": SUPPORTER_ROLE_ID, "VIP_ROLE_ID": VIP_ROLE_ID,
-    "LOTTERY_ANNOUNCE_CHANNEL_ID": LOTTERY_ANNOUNCE_CHANNEL_ID if original_placeholders["LOTTERY_ANNOUNCE_CHANNEL_ID"] else None }
+original_placeholders = { "SHOPKEEPER_ROLE_ID": 987654321098765432, "ADMIN_CHANNEL_ID": 111222333444555666, "SUPPORTER_ROLE_ID": 101010101010101010, "VIP_ROLE_ID": 202020202020202020, "LOTTERY_ANNOUNCE_CHANNEL_ID": 111222333444555666 if _LOTTERY_ANNOUNCE_CHANNEL_ID_STR == "111222333444555666" else None }
+current_ids = { "SHOPKEEPER_ROLE_ID": SHOPKEEPER_ROLE_ID, "ADMIN_CHANNEL_ID": ADMIN_CHANNEL_ID, "SUPPORTER_ROLE_ID": SUPPORTER_ROLE_ID, "VIP_ROLE_ID": VIP_ROLE_ID, "LOTTERY_ANNOUNCE_CHANNEL_ID": LOTTERY_ANNOUNCE_CHANNEL_ID if original_placeholders["LOTTERY_ANNOUNCE_CHANNEL_ID"] else None }
 for name, placeholder_id in original_placeholders.items():
     if placeholder_id is not None and current_ids.get(name) == placeholder_id:
-         logger.warning(f"Config Warning: {name} still placeholder ({placeholder_id}).")
-         PLACEHOLDER_IDS_PRESENT = True
+         logger.warning(f"Config Warning: {name} still placeholder ({placeholder_id})."); PLACEHOLDER_IDS_PRESENT = True
 
-# Lottery Settings
 try: LOTTERY_TICKET_PRICE = int(os.getenv("LOTTERY_TICKET_PRICE", 10))
 except ValueError: LOTTERY_TICKET_PRICE = 10
 try: LOTTERY_INTERVAL_HOURS = float(os.getenv("LOTTERY_INTERVAL_HOURS", 2.0))
 except ValueError: LOTTERY_INTERVAL_HOURS = 2.0
-
-# Shop Settings
 SHOP_TIMEZONE_STR = os.getenv("SHOP_TIMEZONE", 'America/Chicago')
 try: SHOP_TIMEZONE = pytz.timezone(SHOP_TIMEZONE_STR)
 except pytz.UnknownTimeZoneError: SHOP_TIMEZONE = pytz.utc
 SHOP_OPEN_HOUR = int(os.getenv("SHOP_OPEN_HOUR", 10)); SHOP_OPEN_MINUTE = int(os.getenv("SHOP_OPEN_MINUTE", 0))
 SHOP_CLOSE_HOUR = int(os.getenv("SHOP_CLOSE_HOUR", 21)); SHOP_CLOSE_MINUTE = int(os.getenv("SHOP_CLOSE_MINUTE", 0))
 SHOP_OPEN_TIME = time(SHOP_OPEN_HOUR, SHOP_OPEN_MINUTE); SHOP_CLOSE_TIME = time(SHOP_CLOSE_HOUR, SHOP_CLOSE_MINUTE)
-
-# Gambling Settings - Base values, contribution rate loaded from bot_data
 SLOT_EMOJIS = ["🍎", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "⭐", "💎"]; SLOT_JACKPOT_EMOJI = "💎"
-DEFAULT_SLOT_JACKPOT_CONTRIBUTION = 0.10 # Default rate (10%)
+DEFAULT_SLOT_JACKPOT_CONTRIBUTION = 0.10
 DICE_WIN_MULTIPLIER = 5; REDBLACK_WIN_MULTIPLIER = 1.9; REDBLACK_COOLDOWN_SECONDS = 5
-
-# Retroactive Scan Settings
 SCAN_MESSAGE_LIMIT_PER_CHANNEL = int(os.getenv("SCAN_MESSAGE_LIMIT", 10000))
-
-# Data File Paths
 DATA_DIR = "data"; USER_DATA_FILE = os.path.join(DATA_DIR, "user_balances.json")
 SHOP_ITEMS_FILE = os.path.join(DATA_DIR, "shop_items.json"); BOT_DATA_FILE = os.path.join(DATA_DIR, "bot_data.json")
-
 if not DISCORD_BOT_TOKEN: logger.critical("FATAL: Token missing."); exit(1)
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # --- Data Persistence ---
 user_data = {}; shop_items = {}; bot_data = {}
-
 def load_user_data():
     global user_data
     try:
@@ -110,17 +89,15 @@ def load_user_data():
             except ValueError: logger.warning(f"Skipping invalid user ID key '{user_id_str}'"); continue
         user_data = migrated_data
         if migration_needed: logger.info(f"Migrated user data."); save_user_data()
-        else: logger.info(f"Loaded user data.")
+        elif USER_DATA_FILE and os.path.exists(USER_DATA_FILE): logger.info(f"Loaded user data.")
     except FileNotFoundError: logger.warning(f"{USER_DATA_FILE} not found."); user_data = {}
     except json.JSONDecodeError: logger.error(f"Error decoding {USER_DATA_FILE}."); user_data = {}
     except Exception as e: logger.error(f"Error loading user data: {e}"); user_data = {}
-
 def save_user_data():
     try:
         data_to_save = {str(k): v for k, v in user_data.items()}
         with open(USER_DATA_FILE, 'w') as f: json.dump(data_to_save, f, indent=4)
     except Exception as e: logger.error(f"Error saving user data: {e}")
-
 def get_user_data(user_id: int) -> dict:
     user_id = int(user_id)
     if user_id not in user_data: user_data[user_id] = {"balance": 0, "savings": 0, "pin": None}
@@ -129,7 +106,6 @@ def get_user_data(user_id: int) -> dict:
     if "savings" not in ud or not isinstance(ud["savings"], (int, float)): ud["savings"] = 0
     if "pin" not in ud or (ud["pin"] is not None and not isinstance(ud["pin"], str)): ud["pin"] = None
     return user_data[user_id]
-
 def load_shop_items():
     global shop_items
     try:
@@ -138,12 +114,10 @@ def load_shop_items():
     except FileNotFoundError: logger.warning(f"{SHOP_ITEMS_FILE} not found."); shop_items = {}
     except json.JSONDecodeError: logger.error(f"Error decoding {SHOP_ITEMS_FILE}."); shop_items = {}
     except Exception as e: logger.error(f"Error loading shop items: {e}"); shop_items = {}
-
 def save_shop_items():
     try:
         with open(SHOP_ITEMS_FILE, 'w') as f: json.dump(shop_items, f, indent=4)
     except Exception as e: logger.error(f"Error saving shop items: {e}")
-
 def load_bot_data():
     global bot_data
     default_data = { "slot_jackpot_pool": 0.0, "lottery_pot": 0.0, "lottery_tickets": [], "slot_jackpot_contribution": DEFAULT_SLOT_JACKPOT_CONTRIBUTION }
@@ -161,7 +135,6 @@ def load_bot_data():
     except FileNotFoundError: logger.warning(f"{BOT_DATA_FILE} not found."); bot_data = default_data.copy()
     except json.JSONDecodeError: logger.error(f"Error decoding {BOT_DATA_FILE}."); bot_data = default_data.copy()
     except Exception as e: logger.error(f"Error loading bot data: {e}"); bot_data = default_data.copy()
-
 def save_bot_data():
     try:
         with open(BOT_DATA_FILE, 'w') as f: json.dump(bot_data, f, indent=4)
@@ -437,7 +410,6 @@ class ShopAdminCog(commands.Cog):
             else: await inter.followup.send(msg, ephemeral=True)
         except Exception: pass
 
-    # --- Shop Admin Group ---
     @commands.slash_command(name="shopadmin", description="Manage shop items.")
     async def shopadmin(self, inter: disnake.ApplicationCommandInteraction): pass
     @shopadmin.sub_command(name="list", description="List all shop items.")
@@ -526,7 +498,6 @@ class ShopAdminCog(commands.Cog):
     async def shopadmin_add(self, inter: disnake.ApplicationCommandInteraction):
         modal = self.ShopAddItemModal(); await inter.response.send_modal(modal)
 
-    # --- Admin Coins Group ---
     @commands.slash_command(name="admincoins", description="Manage coins.")
     async def admincoins(self, inter: disnake.ApplicationCommandInteraction): pass
     @admincoins.sub_command(name="give", description="Give coins.")
@@ -564,10 +535,9 @@ class ShopAdminCog(commands.Cog):
     async def admincoins_setjackpotcontribution(self, inter: disnake.ApplicationCommandInteraction, percentage: float = commands.Param(ge=0.0, le=100.0)):
         load_bot_data()
         new_rate = percentage / 100.0
-        bot_data["slot_jackpot_contribution"] = new_rate
-        save_bot_data() # Save immediately after setting
+        bot_data["slot_jackpot_contribution"] = new_rate; save_bot_data() # Save immediately
         logger.info(f"Admin {inter.author} set jackpot contribution rate to {new_rate:.1%}.")
-        await inter.response.send_message(f"✅ Set jackpot contribution rate to **{percentage:.1f}%**.", ephemeral=True)
+        await inter.response.send_message(f"✅ Set jackpot contribution rate to **{percentage:.1f}%**.", ephemeral=True) # Ephemeral confirm
 
 # --- Savings Account Commands ---
 @bot.slash_command(name="savings", description="Manage savings.")
@@ -713,6 +683,7 @@ async def lottery_buy(inter: disnake.ApplicationCommandInteraction, tickets: int
     if udata["balance"] < cost: await inter.response.send_message(f"❌ Need {cost:,}, have {int(udata['balance']):,}.", ephemeral=True); return
     udata["balance"] -= cost; bot_data["lottery_pot"] += cost; bot_data["lottery_tickets"].extend([user_id] * tickets)
     logger.info(f"User {user_id} bought {tickets} tickets for {cost}.")
+    save_bot_data(); save_user_data() # Save changes
     await inter.response.send_message(f"🎟️ Bought {tickets} ticket(s) for {cost:,}!\nBal: {int(udata['balance']):,}, Pot: {bot_data['lottery_pot']:,.2f}", ephemeral=True) # Ephemeral
 @lottery_base.sub_command(name="info", description="Show lottery info.")
 async def lottery_info(inter: disnake.ApplicationCommandInteraction):
@@ -825,7 +796,7 @@ async def help_command(inter: disnake.ApplicationCommandInteraction):
             if isinstance(cmd.cog, ShopAdminCog): cat = "Admin"; adm = True
             elif name == "shop": cat = "Shop"
             elif name == "savings": cat = "Savings"
-            elif name == "gamble": cat = "Gambling" # Corrected Category
+            elif name == "gamble": cat = "Gambling"
             elif name == "lottery": cat = "Lottery"
             elif name == "supporter": cat = "Supporter Perks"; sup = True
             elif name == "vip": cat = "VIP Perks"; vip = True
@@ -856,8 +827,8 @@ async def help_command(inter: disnake.ApplicationCommandInteraction):
             if cat in cmap:
                 acc_cmds = []
                 for info in sorted(cmap[cat], key=lambda c: c['cmd_string']):
-                    can_access = True # Assume access
-                    if not is_server_admin: # Apply checks ONLY if not a server admin
+                    can_access = True
+                    if not is_server_admin: # Apply checks ONLY if not server admin
                         if info["admin"] and not is_admin_context: can_access = False
                         if info["supporter"] and not is_sup: can_access = False
                         if info["vip"] and not is_vip: can_access = False
