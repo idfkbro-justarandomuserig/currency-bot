@@ -1,9 +1,9 @@
 # bot.py
-# Final Version based on user feedback and previous iterations
-# Includes: Lottery, Supporter/VIP commands, setjackpot command, /balance command
-# Public responses for Shop, Gambling, Lottery Info
-# Help command loading fix & SlashGroup fix
-# Uses sync_commands_debug=True and correct Param syntax
+# Final Version incorporating all features and fixes.
+# Includes: Lottery, Supporter/VIP commands, setjackpot cmd, /balance cmd, setjackpotcontribution cmd.
+# Public responses for Shop, Gambling, Lottery Info.
+# Help command fixes: loading state, SlashGroup error, doesn't list self, Admin override.
+# Uses sync_commands_debug=True and correct Param syntax.
 
 import disnake
 from disnake.ext import commands, tasks
@@ -76,9 +76,10 @@ SHOP_OPEN_HOUR = int(os.getenv("SHOP_OPEN_HOUR", 10)); SHOP_OPEN_MINUTE = int(os
 SHOP_CLOSE_HOUR = int(os.getenv("SHOP_CLOSE_HOUR", 21)); SHOP_CLOSE_MINUTE = int(os.getenv("SHOP_CLOSE_MINUTE", 0))
 SHOP_OPEN_TIME = time(SHOP_OPEN_HOUR, SHOP_OPEN_MINUTE); SHOP_CLOSE_TIME = time(SHOP_CLOSE_HOUR, SHOP_CLOSE_MINUTE)
 
-# Gambling Settings
+# Gambling Settings - Base values, contribution rate loaded from bot_data
 SLOT_EMOJIS = ["🍎", "🍊", "🍋", "🍉", "🍇", "🍓", "🍒", "⭐", "💎"]; SLOT_JACKPOT_EMOJI = "💎"
-SLOT_JACKPOT_CONTRIBUTION = 0.10; DICE_WIN_MULTIPLIER = 5; REDBLACK_WIN_MULTIPLIER = 1.9; REDBLACK_COOLDOWN_SECONDS = 5
+DEFAULT_SLOT_JACKPOT_CONTRIBUTION = 0.10 # Default rate (10%)
+DICE_WIN_MULTIPLIER = 5; REDBLACK_WIN_MULTIPLIER = 1.9; REDBLACK_COOLDOWN_SECONDS = 5
 
 # Retroactive Scan Settings
 SCAN_MESSAGE_LIMIT_PER_CHANNEL = int(os.getenv("SCAN_MESSAGE_LIMIT", 10000))
@@ -145,16 +146,18 @@ def save_shop_items():
 
 def load_bot_data():
     global bot_data
-    default_data = {"slot_jackpot_pool": 0.0, "lottery_pot": 0.0, "lottery_tickets": []}
+    default_data = { "slot_jackpot_pool": 0.0, "lottery_pot": 0.0, "lottery_tickets": [], "slot_jackpot_contribution": DEFAULT_SLOT_JACKPOT_CONTRIBUTION }
     try:
         with open(BOT_DATA_FILE, 'r') as f: loaded_data = json.load(f)
         bot_data["slot_jackpot_pool"] = float(loaded_data.get("slot_jackpot_pool", default_data["slot_jackpot_pool"]))
         bot_data["lottery_pot"] = float(loaded_data.get("lottery_pot", default_data["lottery_pot"]))
         bot_data["lottery_tickets"] = loaded_data.get("lottery_tickets", default_data["lottery_tickets"])
+        contrib_rate = float(loaded_data.get("slot_jackpot_contribution", default_data["slot_jackpot_contribution"]))
+        bot_data["slot_jackpot_contribution"] = max(0.0, min(1.0, contrib_rate))
         if not isinstance(bot_data["slot_jackpot_pool"], float): bot_data["slot_jackpot_pool"] = 0.0
         if not isinstance(bot_data["lottery_pot"], float): bot_data["lottery_pot"] = 0.0
         if not isinstance(bot_data["lottery_tickets"], list): bot_data["lottery_tickets"] = []
-        logger.info(f"Loaded bot data.")
+        logger.info(f"Loaded bot data (Jackpot Contrib: {bot_data['slot_jackpot_contribution']:.1%}).")
     except FileNotFoundError: logger.warning(f"{BOT_DATA_FILE} not found."); bot_data = default_data.copy()
     except json.JSONDecodeError: logger.error(f"Error decoding {BOT_DATA_FILE}."); bot_data = default_data.copy()
     except Exception as e: logger.error(f"Error loading bot data: {e}"); bot_data = default_data.copy()
@@ -429,7 +432,7 @@ class ShopAdminCog(commands.Cog):
     async def cog_command_error(self, inter: disnake.ApplicationCommandInteraction, error: commands.CommandError):
         if isinstance(error, (commands.CheckFailure, commands.UserInputError, commands.NoPrivateMessage)): msg = str(error)
         else: logger.error(f"Admin Cog Error: {error}", exc_info=True); msg = "Unexpected admin error.";
-        try: # Send error ephemerally
+        try:
             if not inter.response.is_done(): await inter.response.send_message(msg, ephemeral=True)
             else: await inter.followup.send(msg, ephemeral=True)
         except Exception: pass
@@ -437,7 +440,7 @@ class ShopAdminCog(commands.Cog):
     # --- Shop Admin Group ---
     @commands.slash_command(name="shopadmin", description="Manage shop items.")
     async def shopadmin(self, inter: disnake.ApplicationCommandInteraction): pass
-    @shopadmin.sub_command(name="list", description="List all shop items (including expired).")
+    @shopadmin.sub_command(name="list", description="List all shop items.")
     async def shopadmin_list(self, inter: disnake.ApplicationCommandInteraction):
         load_shop_items();
         if not shop_items: await inter.response.send_message("No items.", ephemeral=True); return
@@ -467,7 +470,7 @@ class ShopAdminCog(commands.Cog):
         if not embeds: await inter.response.send_message("No items found.", ephemeral=True); return
         for i, embed in enumerate(embeds): embed.title = f"Shop Items (Page {i+1}/{len(embeds)})"
         await inter.response.send_message(embed=embeds[0], ephemeral=True) # List remains ephemeral
-    @shopadmin.sub_command(name="remove", description="Remove an item from the shop.")
+    @shopadmin.sub_command(name="remove", description="Remove an item.")
     async def shopadmin_remove(self, inter: disnake.ApplicationCommandInteraction, item_id: str):
         item_id = item_id.strip(); load_shop_items()
         if item_id in shop_items:
@@ -510,8 +513,7 @@ class ShopAdminCog(commands.Cog):
                 if custom_id in shop_items: await inter.followup.send(f"❌ Custom ID exists.", ephemeral=True); return
                 uid = custom_id
             else:
-                for _ in range(5):
-                    uid = uuid.uuid4().hex[:8]
+                for _ in range(5): uid = uuid.uuid4().hex[:8];
                     if uid not in shop_items: break
                 else: await inter.followup.send(f"❌ Auto ID fail.", ephemeral=True); return
             item = {"id": uid, "name": name, "credit_cost": cost, "usd_price": usd,
@@ -550,13 +552,22 @@ class ShopAdminCog(commands.Cog):
         udata = get_user_data(user.id); udata["balance"] = amount
         logger.info(f"Admin {inter.author} set {user.id}'s bal to {amount}.")
         await inter.response.send_message(f"✅ Set {user.mention}'s bal to {amount:,}.", ephemeral=True, allowed_mentions=disnake.AllowedMentions.none())
-    @admincoins.sub_command(name="setjackpot", description="Set jackpot pool.")
+    @admincoins.sub_command(name="setjackpot", description="Set jackpot pool amount.")
     async def admincoins_setjackpot(self, inter: disnake.ApplicationCommandInteraction, amount: float = commands.Param(ge=0.0)):
         load_bot_data()
         if 'slot_jackpot_pool' not in bot_data or not isinstance(bot_data['slot_jackpot_pool'], float): bot_data['slot_jackpot_pool'] = 0.0
         bot_data["slot_jackpot_pool"] = float(amount)
+        save_bot_data() # Save immediately after setting
         logger.info(f"Admin {inter.author} set jackpot pool to {amount:.2f}.")
         await inter.response.send_message(f"✅ Set jackpot to {amount:,.2f}.", ephemeral=True)
+    @admincoins.sub_command(name="setjackpotcontribution", description="Set % of slot loss added to jackpot (e.g., 10 for 10%).")
+    async def admincoins_setjackpotcontribution(self, inter: disnake.ApplicationCommandInteraction, percentage: float = commands.Param(ge=0.0, le=100.0)):
+        load_bot_data()
+        new_rate = percentage / 100.0
+        bot_data["slot_jackpot_contribution"] = new_rate
+        save_bot_data() # Save immediately after setting
+        logger.info(f"Admin {inter.author} set jackpot contribution rate to {new_rate:.1%}.")
+        await inter.response.send_message(f"✅ Set jackpot contribution rate to **{percentage:.1f}%**.", ephemeral=True)
 
 # --- Savings Account Commands ---
 @bot.slash_command(name="savings", description="Manage savings.")
@@ -622,6 +633,8 @@ async def gamble_slots(inter: disnake.ApplicationCommandInteraction, amount: int
     winnings = 0; payout_desc = "Lost."; jackpot_hit = False
     if not isinstance(bot_data.get("slot_jackpot_pool"), float): bot_data["slot_jackpot_pool"] = 0.0
     jackpot_pool = bot_data["slot_jackpot_pool"]
+    contribution_rate = bot_data.get("slot_jackpot_contribution", DEFAULT_SLOT_JACKPOT_CONTRIBUTION)
+    if not isinstance(contribution_rate, float) or not (0.0 <= contribution_rate <= 1.0): contribution_rate = DEFAULT_SLOT_JACKPOT_CONTRIBUTION
     if reels[0] == reels[1] == reels[2]:
         if reels[0] == SLOT_JACKPOT_EMOJI:
             winnings = amount + (jackpot_pool * 0.50); bot_data["slot_jackpot_pool"] *= 0.50
@@ -630,8 +643,9 @@ async def gamble_slots(inter: disnake.ApplicationCommandInteraction, amount: int
     elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
         winnings = amount * 2; payout_desc = f"👍 Pair! Won **{winnings:,}**!"; result_embed.color = disnake.Color.blue()
     else:
-        contribution = amount * SLOT_JACKPOT_CONTRIBUTION; bot_data["slot_jackpot_pool"] += contribution
-        payout_desc = f"😥 Lost. {contribution:,.2f} added to jackpot."; result_embed.color = disnake.Color.red()
+        contribution = amount * contribution_rate
+        bot_data["slot_jackpot_pool"] += contribution
+        payout_desc = f"😥 Lost. {contribution:,.2f} ({contribution_rate:.0%}) added to jackpot."; result_embed.color = disnake.Color.red()
     if not isinstance(winnings, (int, float)): winnings = 0
     udata["balance"] += winnings
     if not isinstance(udata["balance"], (int, float)): udata["balance"] = 0
@@ -639,6 +653,7 @@ async def gamble_slots(inter: disnake.ApplicationCommandInteraction, amount: int
     result_embed.add_field(name="Your New Balance", value=f"{int(udata['balance']):,} coins", inline=True)
     result_embed.add_field(name="Jackpot Pool", value=f"{bot_data['slot_jackpot_pool']:,.2f} coins", inline=True)
     logger.info(f"User {user_id} slots. Bet:{amount}, Win:{winnings:.2f}")
+    save_bot_data() # Save potentially updated jackpot pool
     await inter.edit_original_message(embed=result_embed) # Public edit
 
 @gamble_base.sub_command(name="dice", description="Guess the roll of a 6-sided die.")
@@ -792,65 +807,61 @@ async def vip_error(inter: disnake.ApplicationCommandInteraction, error):
 @bot.slash_command(name="help", description="Shows available commands.")
 async def help_command(inter: disnake.ApplicationCommandInteraction):
     await inter.response.defer(ephemeral=True) # Help remains ephemeral
-    try: # Wrap in try/except
+    try:
         embeds = []; base = disnake.Embed(title=f"{bot.user.name} Help", color=disnake.Color.blurple()).set_footer(text="<> required, [] optional.")
         cmap = {}; pgroups = set();
         def fmt_params(opts: list[disnake.Option]) -> str: return " ".join([f"<{o.name}>" if o.required else f"[{o.name}]" for o in sorted(opts, key=lambda o: not o.required)])
 
+        is_server_admin = False
+        if inter.guild and isinstance(inter.author, disnake.Member):
+             is_server_admin = inter.author.guild_permissions.administrator
+
         for cmd in bot.slash_commands:
             name = cmd.name;
-            # Skip if already processed as part of a group
-            # This check might be slightly redundant if bot.slash_commands only yields base commands, but safe to keep
-            if name in pgroups and hasattr(cmd, 'parent') and cmd.parent:
-                continue
+            if hasattr(cmd, 'parent') and cmd.parent and name in pgroups: continue
+            if name == "help": continue # Skip help command itself
 
-            # Determine category and permissions flags
             cat = "General"; adm = False; sup = False; vip = False
             if isinstance(cmd.cog, ShopAdminCog): cat = "Admin"; adm = True
             elif name == "shop": cat = "Shop"
             elif name == "savings": cat = "Savings"
-            elif name == "gamble": cat = "Gambling"
+            elif name == "gamble": cat = "Gambling" # Corrected Category
             elif name == "lottery": cat = "Lottery"
             elif name == "supporter": cat = "Supporter Perks"; sup = True
             elif name == "vip": cat = "VIP Perks"; vip = True
-            elif name == "help": cat = "General"
             elif name == "balance": cat = "Money"
-            else: cat = "Money" # Default category
+            else: cat = "Money"
 
             if cat not in cmap: cmap[cat] = []
-
-            # Check if it's a group base by looking for children
             if hasattr(cmd, 'children') and cmd.children:
-                pgroups.add(name) # Mark base group name as processed
+                pgroups.add(name)
                 for sub_cmd in cmd.children.values():
                     if isinstance(sub_cmd, commands.InvokableSlashCommand):
                         ps = fmt_params(sub_cmd.options); s = f"</{name} {sub_cmd.name} {ps}>".strip()
-                        sub_cat = cat; sub_adm = adm; sub_sup = sup; sub_vip = vip # Inherit by default
-                        # Add specific checks if subcommands have different perms/cats if needed
-                        if sub_cat not in cmap: cmap[sub_cat] = [] # Ensure category exists if overridden
+                        sub_cat = cat; sub_adm = adm; sub_sup = sup; sub_vip = vip
+                        if sub_cat not in cmap: cmap[sub_cat] = []
                         cmap[sub_cat].append({"cmd_string": s, "description": sub_cmd.description or "...", "admin": sub_adm, "supporter": sub_sup, "vip": sub_vip })
-            # Handle standalone commands
             elif isinstance(cmd, commands.InvokableSlashCommand):
-                # Check again it wasn't processed via a parent group (should be redundant but safe)
-                if hasattr(cmd, 'parent') and cmd.parent and cmd.parent.name in pgroups:
-                     continue
+                if hasattr(cmd, 'parent') and cmd.parent and cmd.parent.name in pgroups: continue
                 ps = fmt_params(cmd.options); s = f"</{name} {ps}>".strip()
                 cmap[cat].append({"cmd_string": s, "description": cmd.description or "...", "admin": adm, "supporter": sup, "vip": vip })
 
-        # Build embeds based on user access
         order = ["Money", "Savings", "Gambling", "Lottery", "Shop", "Supporter Perks", "VIP Perks", "Admin", "General"]
-        is_adm = False;
-        if inter.guild and isinstance(inter.author, disnake.Member): is_adm = (inter.author.id == inter.guild.owner_id or inter.channel_id == ADMIN_CHANNEL_ID)
+        is_admin_context = False
+        if not is_server_admin and inter.guild and isinstance(inter.author, disnake.Member):
+             is_admin_context = (inter.author.id == inter.guild.owner_id or inter.channel_id == ADMIN_CHANNEL_ID)
         is_sup = check_role(inter, SUPPORTER_ROLE_ID); is_vip = check_role(inter, VIP_ROLE_ID); accessible_count = 0
+
         for cat in order:
             if cat in cmap:
                 acc_cmds = []
                 for info in sorted(cmap[cat], key=lambda c: c['cmd_string']):
-                    can = True
-                    if info["admin"] and not is_adm: can = False
-                    if info["supporter"] and not is_sup: can = False
-                    if info["vip"] and not is_vip: can = False
-                    if can: acc_cmds.append(f"`{info['cmd_string']}`\n{info['description']}")
+                    can_access = True # Assume access
+                    if not is_server_admin: # Apply checks ONLY if not a server admin
+                        if info["admin"] and not is_admin_context: can_access = False
+                        if info["supporter"] and not is_sup: can_access = False
+                        if info["vip"] and not is_vip: can_access = False
+                    if can_access: acc_cmds.append(f"`{info['cmd_string']}`\n{info['description']}")
                 if acc_cmds:
                     accessible_count += 1; cat_embed = disnake.Embed(title=f"**{cat}**", color=disnake.Color.blurple())
                     val = "\n\n".join(acc_cmds)
@@ -859,17 +870,16 @@ async def help_command(inter: disnake.ApplicationCommandInteraction):
                          for i, p in enumerate(parts): embeds.append(disnake.Embed(title=f"**{cat} ({i+1})**", description=p, color=disnake.Color.blurple()))
                     else: cat_embed.description = val; embeds.append(cat_embed)
 
-        # Send results
         if accessible_count == 0: base.description = "No commands accessible."; await inter.followup.send(embed=base, ephemeral=True)
         elif len(embeds) == 1: await inter.followup.send(embed=embeds[0], ephemeral=True)
         elif len(embeds) <= 10:
-             embeds[0].title = f"{bot.user.name} Help"; embeds[0].description = ("Access:\n\n" + embeds[0].description).strip(); embeds[0].set_footer(text="<> required, [] optional.")
+             embeds[0].title = f"{bot.user.name} Help"; embeds[0].description = ("Categories:\n\n" + embeds[0].description).strip(); embeds[0].set_footer(text="<> req, [] opt.")
              await inter.followup.send(embeds=embeds, ephemeral=True)
-        else: embeds[0].title = f"{bot.user.name} Help"; embeds[0].description = ("Access(1/many):\n\n" + embeds[0].description).strip(); embeds[0].set_footer(text="<> req, [] opt. More cmds.")
-        await inter.followup.send(embeds=embeds[:10], ephemeral=True)
+        else: embeds[0].title = f"{bot.user.name} Help"; embeds[0].description = ("Categories(1/many):\n\n" + embeds[0].description).strip(); embeds[0].set_footer(text="<> req, [] opt. More cmds.")
+              await inter.followup.send(embeds=embeds[:10], ephemeral=True)
     except Exception as e:
         logger.error(f"Error generating help command: {e}", exc_info=True)
-        await inter.followup.send("❌ Error generating help message.", ephemeral=True) # Ensure followup
+        await inter.followup.send("❌ Error generating help message.", ephemeral=True)
 
 # --- Cog Registration ---
 try: bot.add_cog(ShopAdminCog(bot)); logger.info("ShopAdminCog loaded.")
